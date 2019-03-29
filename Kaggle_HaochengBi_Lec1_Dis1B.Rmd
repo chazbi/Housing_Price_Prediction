@@ -1,0 +1,279 @@
+---
+title: "Kaggle_Code_HaochengBi_Lec1_Dis1B"
+author: "Haocheng Bi, 804785432"
+date: "3/16/2019"
+output: html_document
+---
+
+part1: load libraries and data
+```{r, error = FALSE}
+library(ggplot2)
+library(dplyr)
+library(corrplot)
+library(car)
+
+train1 <- read.csv("HTrainW19Final.csv", stringsAsFactors = FALSE)
+test1 <-  read.csv("HTestW19Final.csv", stringsAsFactors = FALSE)
+```
+
+part2: examine data
+```{r}
+str(train1[, c(1:5, 81)])
+dim(train1)
+dim(test1)
+```
+
+part3.1: explore response variable: SalePrice
+```{r}
+which(is.na(train1$SalePrice))   #no NAs
+
+priceGraph <- ggplot(data=data.frame(train1$SalePrice), aes(x=train1$SalePrice)) +
+                  geom_histogram(fill="gold", binwidth = 5000) +
+                  scale_x_continuous(breaks= seq(0, 800000, by=100000))
+priceGraph  #very right skewed
+summary(train1$SalePrice)
+```
+
+part3.2: explore important numeric variables
+```{r}
+numericVars <- which(sapply(train1, is.numeric))
+numericVarNames <- names(numericVars)
+length(numericVarNames)   #there are 38 numeric variables
+
+all_numVar <- train1[, numericVars]
+cor_numVar <- cor(all_numVar, use="pairwise.complete.obs")#correlations of all numeric variables
+cor_sorted <- as.matrix(sort(cor_numVar[,'SalePrice'], decreasing = TRUE))
+#select only variables with abs(corr > 0.5)
+CorHigh <- names(which(apply(cor_sorted, 1, function(x) abs(x)>0.5)))
+cor_numVar <- cor_numVar[CorHigh, CorHigh]
+#visualize correlation
+corrplot.mixed(cor_numVar, tl.col="black", tl.pos = "lt")
+```
+
+part 3.3: Transform Numeric Variables
+```{r}
+#OverallQual
+train1$OverallQual[is.na(train1$OverallQual)] <- 0
+train1$OverallQual <- as.factor(train1$OverallQual)
+
+#GarageCars
+train1$GarageCars <- as.factor(train1$GarageCars)
+
+#Fireplaces
+train1$Fireplaces <- as.factor(train1$Fireplaces)
+
+#LotArea
+which(is.na(train1$LotArea))  #no NAs
+train1$LotArea <- log(train1$LotArea)
+
+#kitchenQual
+train1$KitchenQual <- as.factor(train1$KitchenQual)
+
+#OverallCond
+train1$OverallCond <- as.factor(train1$OverallCond)
+
+#GrLivArea
+which(is.na(train1$GrLivArea))  #no NAs
+plot(train1$GrLivArea, train1$SalePrice, 
+     xlab = 'Above Ground Living Area', ylab = 'SalePrice',
+     main = 'Distribution of SalePrice Given GrLivArea')
+
+#log transformed
+plot(log(train1$GrLivArea), log(train1$SalePrice),
+     xlab = 'log(Above Ground Living Area)', ylab = 'log(SalePrice)',
+     main = 'Distribution of SalePrice Given GrLivArea')
+```
+
+part 3.4: Explore Categorical Variables
+```{r}
+attach(train1)
+#saleCondition
+train1$SaleCondition <- as.factor(train1$SaleCondition)
+
+#MSZoning
+train1$MSZoning[is.na(train1$MSZoning)] <- 0
+train1$MSZoning <- as.factor(train1$MSZoning)
+
+ZoningPlot <- ggplot(train1[!is.na(train1$SalePrice),], aes(x=MSZoning, y=SalePrice)) +
+        geom_bar(stat='summary', fun.y = "median", fill='red') +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+        scale_y_continuous(breaks= seq(0, 800000, by=50000)) +
+        geom_label(stat = "count", aes(label = ..count.., y = ..count..), size=3) +
+        geom_hline(yintercept=163000, linetype="dashed", color = "red") 
+ZoningPlot
+
+#MSSubClass
+train1$MSSubClass <- as.factor(train1$MSSubClass)
+
+SubclassPlot <- ggplot(train1[!is.na(train1$SalePrice),], aes(x=MSSubClass, y=SalePrice)) +
+        geom_bar(stat='summary', fun.y = "median", fill='gold') +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+        scale_y_continuous(breaks= seq(0, 800000, by=50000)) +
+        geom_label(stat = "count", aes(label = ..count.., y = ..count..), size=3) +
+        geom_hline(yintercept=163000, linetype="dashed", color = "red") 
+SubclassPlot
+
+#Neighborhood
+train1$Neighborhood <- as.factor(train1$Neighborhood)
+
+neighPlot <- ggplot(train1[!is.na(train1$SalePrice),], aes(x=Neighborhood, y=SalePrice)) +
+        geom_bar(stat='summary', fun.y = "median", fill='green') +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+        scale_y_continuous(breaks= seq(0, 800000, by=50000)) +
+        geom_label(stat = "count", aes(label = ..count.., y = ..count..), size=3) +
+        geom_hline(yintercept=163000, linetype="dashed", color = "red") 
+neighPlot
+```
+
+part 4: Feature Engineering
+```{r}
+#1. neighborhood bin
+attach(train1)
+nbrh.map <- c('MeadowV' = 0, 'IDOTRR' = 1, 'Sawyer' = 1, 'BrDale' = 1, 'OldTown' = 1, 'Edwards' = 1,
+             'BrkSide' = 1, 'Blueste' = 1, 'SWISU' = 2, 'NAmes' = 2, 'NPkVill' = 2, 'Mitchel' = 2,
+             'SawyerW' = 2, 'Gilbert' = 2, 'NWAmes' = 2, 'Blmngtn' = 2, 'CollgCr' = 2, 'ClearCr' = 3,
+             'Crawfor' = 3, 'Veenker' = 3, 'Somerst' = 3, 'Timber' = 3, 'StoneBr' = 4, 'NoRidge' = 4,
+             'NridgHt' = 4)
+
+train1['NeighborhoodBin'] <- as.factor(nbrh.map[train1$Neighborhood])
+
+
+#2. totalBath
+train1$FullBath[is.na(train1$FullBath)] <- 0
+train1$HalfBath[is.na(train1$HalfBath)] <- 0
+train1$BsmtFullBath[is.na(train1$BsmtFullBath)] <- 0
+train1$BsmtHalfBath[is.na(train1$BsmtHalfBath)] <- 0
+
+train1$totalBath <- train1$FullBath + (train1$HalfBath * 0.5) + train1$BsmtFullBath + (train1$BsmtHalfBath * 0.5)
+plot(train1$totalBath, log(SalePrice), xlab = 'total number of bathroom',
+     main = "Effects of Total Bathroom on log(SalePrice)")
+
+#3. total SF
+train1$GrLivArea[is.na(train1$GrLivArea)] <- 0
+train1$TotalBsmtSF[is.na(train1$TotalBsmtSF)] <- 0
+train1$totalSquareFeet <- train1$GrLivArea + train1$TotalBsmtSF
+train1$totalSquareFeet <- log(train1$totalSquareFeet)
+plot(train1$totalSquareFeet, log(SalePrice),
+     xlab = 'total square feet', ylab = 'log of sale price',
+     main = 'Effect of Total Square Feet on Log(SalePrice)')
+
+#4. age
+train1$Age <- as.numeric(train1$YrSold)- as.numeric(train1$YearBuilt)
+summary(YearBuilt)
+plot(train1$Age, log(SalePrice), xlab = "Age",
+     ylab = "log of Sale Price", main = "Effects of Age on log of SalePrice")
+
+write.csv(train1, "final_training_data_HaochengBi.csv")
+```
+
+part 5: Build a MLR Model
+```{r}
+kaggle_new = lm(log(SalePrice) ~ SaleCondition +  OverallQual + GarageCars + Fireplaces + LotArea + CentralAir  + Foundation + totalBath + totalSquareFeet + OverallCond  + KitchenQual + Neighborhood + MSSubClass + Age + Neighborhood:GrLivArea, data = train1)
+
+summary(kaggle_new)
+
+#visualize
+par(mfrow=c(2,2))
+plot(kaggle_new)  #check constant variances and normality - no violations
+
+#test multicollinearity
+vif(kaggle_new)
+
+#test
+kaggle_BIC <- step(kaggle_new, direction = "backward", data = train1, k = log(length(train1)))
+```
+
+part 6: clean testing data and make similar transformation
+```{r}
+#saleCondition
+test1$SaleCondition <- as.factor(test1$SaleCondition)
+
+#OverallQual
+test1$OverallQual[is.na(test1$OverallQual)] <- 0
+test1$OverallQual <- as.factor(test1$OverallQual)
+
+#GarageCars
+test1$GarageCars[is.na(test1$GarageCars)] <- 0
+test1$GarageCars <- as.factor(test1$GarageCars)
+
+#Fireplaces
+test1$Fireplaces[is.na(test1$Fireplaces)] <-0
+test1$Fireplaces <- as.factor(test1$Fireplaces)
+
+#LotArea
+test1$LotArea[is.na(test1$LotArea)] <- 0
+test1$LotArea <- log(test1$LotArea)
+
+
+#MSZoning
+test1$MSZoning[is.na(test1$MSZoning)] <- 'C (all)'
+test1$MSZoning <- as.factor(test1$MSZoning)
+
+#MSSubClass
+test1$MSSubClass <- as.factor(test1$MSSubClass)
+
+#totalBath
+test1$FullBath[is.na(test1$FullBath)] <- 0
+test1$HalfBath[is.na(test1$HalfBath)] <- 0
+test1$BsmtFullBath[is.na(test1$BsmtFullBath)] <- 0
+test1$BsmtHalfBath[is.na(test1$BsmtHalfBath)] <- 0
+
+test1$totalBath <- test1$FullBath + (test1$HalfBath * 0.5) + test1$BsmtFullBath + (test1$BsmtHalfBath * 0.5)
+
+#total SF
+test1$GrLivArea[is.na(test1$GrLivArea)] <- 0
+test1$TotalBsmtSF[is.na(test1$TotalBsmtSF)] <- 0
+test1$totalSquareFeet <- test1$GrLivArea + test1$TotalBsmtSF
+test1$totalSquareFeet <- log(test1$totalSquareFeet)
+
+#age
+test1$Age <- as.numeric(test1$YrSold)- as.numeric(test1$YearBuilt)
+
+#KitchenQual
+test1$KitchenQual[is.na(test1$KitchenQual)] <- 'Fa'
+test1$KitchenQual <- as.factor(test1$KitchenQual)
+
+test1$OverallCond <- as.factor(test1$OverallCond)
+
+#mosold
+train1$MoSold <- as.factor(train1$MoSold)
+train1$YrSold <-as.factor(train1$YrSold)
+
+nbrh.map1 <- c('MeadowV' = 0, 'IDOTRR' = 1, 'Sawyer' = 1, 'BrDale' = 1, 'OldTown' = 1, 'Edwards' = 1,
+             'BrkSide' = 1, 'Blueste' = 1, 'SWISU' = 2, 'NAmes' = 2, 'NPkVill' = 2, 'Mitchel' = 2,
+             'SawyerW' = 2, 'Gilbert' = 2, 'NWAmes' = 2, 'Blmngtn' = 2, 'CollgCr' = 2, 'ClearCr' = 3,
+             'Crawfor' = 3, 'Veenker' = 3, 'Somerst' = 3, 'Timber' = 3, 'StoneBr' = 4, 'NoRidge' = 4,
+             'NridgHt' = 4)
+
+test1['NeighborhoodBin'] <- as.factor(nbrh.map1[test1$Neighborhood])
+```
+
+part 7: prediction
+```{r}
+result <- predict(kaggle_new, data.frame(test1))
+
+which(is.na(result))  #no NA produced
+
+#exp
+result <- exp(result)  #transform the response variable back
+result
+
+#compare
+summary(result)
+summary(train1$SalePrice)
+
+par(mfrow = c(1,2))
+hist(result, freq = FALSE, xlab = "Predicted Sale Price",
+     main = "Distribution of Predicted Sale Price")
+hist(train1$SalePrice, freq = FALSE, xlab = "Training Sale Price",
+     main = "Distribution of Training Sale Price")
+
+head(result)
+
+which(result > 500000)
+which(train1$SalePrice > 500000)
+
+#output
+#write.csv(result, "late.csv")
+```
+
