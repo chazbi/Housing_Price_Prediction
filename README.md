@@ -1,5 +1,5 @@
 ## Housing Price Prediction Project
--- By Charles Haocheng Bi
+-- By Charles (Haocheng) Bi
 
 ## Goal
 Goal is to predict the sale price of each house. For houses in the test set, I predicted the value of the `SalePrice` variable with average accuracy of 95%.
